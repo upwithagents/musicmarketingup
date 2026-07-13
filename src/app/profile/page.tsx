@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { Button, Input } from "@/components/ui";
+import { apiFetch } from "@/lib/basePath";
 
 interface LinksState {
   website: string;
@@ -38,7 +39,7 @@ export default function ProfilePage() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const res = await fetch("/api/profile");
+      const res = await apiFetch("/api/profile");
       const data = await res.json();
       if (cancelled) return;
       if (data.profile) {
@@ -63,7 +64,7 @@ export default function ProfilePage() {
     setSaved(false);
     setError(null);
     try {
-      const res = await fetch("/api/profile", {
+      const res = await apiFetch("/api/profile", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

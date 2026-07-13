@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Badge, Button, Input, Select } from "@/components/ui";
+import { apiFetch } from "@/lib/basePath";
 
 interface Song {
   id: string;
@@ -102,7 +103,7 @@ export default function SongsPage() {
   const [busy, setBusy] = useState(false);
 
   const loadSongs = useCallback(async () => {
-    const res = await fetch("/api/songs");
+    const res = await apiFetch("/api/songs");
     const data = await res.json();
     setSongs(data.songs ?? []);
   }, []);
@@ -164,7 +165,7 @@ export default function SongsPage() {
 
     setBusy(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         editingId ? `/api/songs/${editingId}` : "/api/songs",
         {
           method: editingId ? "PUT" : "POST",
@@ -192,7 +193,7 @@ export default function SongsPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/songs/${song.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/songs/${song.id}`, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError(data.error ?? "Delete failed");

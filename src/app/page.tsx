@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button } from "@/components/ui";
+import { apiFetch } from "@/lib/basePath";
 
 interface Gig {
   id: string;
@@ -65,10 +66,10 @@ export default function Home() {
 
   const load = useCallback(async () => {
     const [gigRes, campRes, songRes, profileRes] = await Promise.all([
-      fetch("/api/gigs"),
-      fetch("/api/campaigns"),
-      fetch("/api/songs"),
-      fetch("/api/profile"),
+      apiFetch("/api/gigs"),
+      apiFetch("/api/campaigns"),
+      apiFetch("/api/songs"),
+      apiFetch("/api/profile"),
     ]);
     setGigs((await gigRes.json()).gigs ?? []);
     setCampaigns((await campRes.json()).campaigns ?? []);
@@ -82,7 +83,7 @@ export default function Home() {
   }, [load]);
 
   async function toggleTask(id: string, current: "open" | "done") {
-    await fetch(`/api/tasks/${id}`, {
+    await apiFetch(`/api/tasks/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ status: current === "open" ? "done" : "open" }),
@@ -91,7 +92,7 @@ export default function Home() {
   }
 
   async function setPostStatus(id: string, status: string) {
-    await fetch(`/api/posts/${id}`, {
+    await apiFetch(`/api/posts/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ status }),

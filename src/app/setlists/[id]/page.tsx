@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Badge, Button, Select } from "@/components/ui";
+import { apiFetch } from "@/lib/basePath";
 
 interface Song {
   id: string;
@@ -58,7 +59,7 @@ export default function SetlistDetailPage() {
   const [busy, setBusy] = useState(false);
 
   const loadSetlist = useCallback(async () => {
-    const res = await fetch(`/api/setlists/${id}`);
+    const res = await apiFetch(`/api/setlists/${id}`);
     if (!res.ok) {
       setSetlist(null);
       return;
@@ -72,7 +73,7 @@ export default function SetlistDetailPage() {
     // state updates happen only after the fetches resolve, never synchronously
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSetlist();
-    void fetch("/api/songs")
+    void apiFetch("/api/songs")
       .then((res) => res.json())
       .then((data) => setSongs(data.songs ?? []));
   }, [loadSetlist]);
@@ -81,7 +82,7 @@ export default function SetlistDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/setlists/${id}`, {
+      const res = await apiFetch(`/api/setlists/${id}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ order }),
@@ -148,7 +149,7 @@ export default function SetlistDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/setlists/${id}/autoorder`, { method: "POST" });
+      const res = await apiFetch(`/api/setlists/${id}/autoorder`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Auto-order failed");

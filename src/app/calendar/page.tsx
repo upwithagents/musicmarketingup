@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Input, Select } from "@/components/ui";
+import { apiFetch } from "@/lib/basePath";
 
 const POST_STATUSES = ["idea", "drafted", "posted", "skipped"] as const;
 type PostStatus = (typeof POST_STATUSES)[number];
@@ -68,8 +69,8 @@ export default function CalendarPage() {
 
   const load = useCallback(async () => {
     const [campRes, aiRes] = await Promise.all([
-      fetch("/api/campaigns"),
-      fetch("/api/posts/ai-status"),
+      apiFetch("/api/campaigns"),
+      apiFetch("/api/posts/ai-status"),
     ]);
     const data = await campRes.json();
     const ai = await aiRes.json();
@@ -97,7 +98,7 @@ export default function CalendarPage() {
   }, [load]);
 
   async function setPostStatus(id: string, status: PostStatus) {
-    await fetch(`/api/posts/${id}`, {
+    await apiFetch(`/api/posts/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ status }),
@@ -106,7 +107,7 @@ export default function CalendarPage() {
   }
 
   async function toggleTask(id: string, current: "open" | "done") {
-    await fetch(`/api/tasks/${id}`, {
+    await apiFetch(`/api/tasks/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ status: current === "open" ? "done" : "open" }),
@@ -225,7 +226,7 @@ function PostCard({
     setBusy(true);
     setNote(null);
     try {
-      const res = await fetch(`/api/posts/${post.id}`, {
+      const res = await apiFetch(`/api/posts/${post.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ title, body, platform, date: new Date(date).toISOString() }),
@@ -246,7 +247,7 @@ function PostCard({
     setRefining(true);
     setNote(null);
     try {
-      const res = await fetch(`/api/posts/${post.id}/refine`, { method: "POST" });
+      const res = await apiFetch(`/api/posts/${post.id}/refine`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         setNote(data.error ?? "Could not improve draft");

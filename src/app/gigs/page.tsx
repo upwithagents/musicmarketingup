@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Badge, Button, Input, Select } from "@/components/ui";
+import { apiFetch } from "@/lib/basePath";
 
 type GigStatus = "idea" | "contacted" | "confirmed" | "played" | "cancelled";
 
@@ -75,7 +76,7 @@ export default function GigsPage() {
   const [busy, setBusy] = useState(false);
 
   const loadGigs = useCallback(async () => {
-    const res = await fetch("/api/gigs");
+    const res = await apiFetch("/api/gigs");
     const data = await res.json();
     setGigs(data.gigs ?? []);
   }, []);
@@ -107,7 +108,7 @@ export default function GigsPage() {
 
     setBusy(true);
     try {
-      const res = await fetch("/api/gigs", {
+      const res = await apiFetch("/api/gigs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...form, date: new Date(form.date).toISOString() }),

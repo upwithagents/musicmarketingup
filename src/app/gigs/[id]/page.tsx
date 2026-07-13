@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Badge, Button, Input, Select } from "@/components/ui";
+import { apiFetch } from "@/lib/basePath";
 
 type GigStatus = "idea" | "contacted" | "confirmed" | "played" | "cancelled";
 
@@ -86,7 +87,7 @@ export default function GigDetailPage() {
   const [busy, setBusy] = useState(false);
 
   const loadGig = useCallback(async () => {
-    const res = await fetch(`/api/gigs/${id}`);
+    const res = await apiFetch(`/api/gigs/${id}`);
     if (!res.ok) {
       setNotFound(true);
       return;
@@ -107,7 +108,7 @@ export default function GigDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/gigs/${id}`, {
+      const res = await apiFetch(`/api/gigs/${id}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -139,7 +140,7 @@ export default function GigDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/gigs/${id}/promote`, { method: "POST" });
+      const res = await apiFetch(`/api/gigs/${id}/promote`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Could not generate promo plan");
@@ -158,7 +159,7 @@ export default function GigDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/setlists", {
+      const res = await apiFetch("/api/setlists", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -184,7 +185,7 @@ export default function GigDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/tasks/${task.id}`, {
+      const res = await apiFetch(`/api/tasks/${task.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ status: task.status === "open" ? "done" : "open" }),

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Button, Input, Select } from "@/components/ui";
+import { apiFetch } from "@/lib/basePath";
 
 interface SetlistSummary {
   id: string;
@@ -45,7 +46,7 @@ export default function SetlistsPage() {
   const [busy, setBusy] = useState(false);
 
   const loadSetlists = useCallback(async () => {
-    const res = await fetch("/api/setlists");
+    const res = await apiFetch("/api/setlists");
     const data = await res.json();
     setSetlists(data.setlists ?? []);
   }, []);
@@ -54,12 +55,12 @@ export default function SetlistsPage() {
     // state updates happen only after the fetches resolve, never synchronously
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSetlists();
-    void fetch("/api/songs")
+    void apiFetch("/api/songs")
       .then((res) => res.json())
       .then((data) => setSongs(data.songs ?? []));
     // Gigs are a future feature (no /api/gigs yet) — degrade gracefully to an
     // empty list rather than failing the page when the route 404s.
-    void fetch("/api/gigs")
+    void apiFetch("/api/gigs")
       .then((res) => (res.ok ? res.json() : { gigs: [] }))
       .then((data) => setGigs(data.gigs ?? []))
       .catch(() => setGigs([]));
@@ -111,7 +112,7 @@ export default function SetlistsPage() {
 
     setBusy(true);
     try {
-      const res = await fetch("/api/setlists", {
+      const res = await apiFetch("/api/setlists", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
@@ -135,7 +136,7 @@ export default function SetlistsPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/setlists/${setlist.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/setlists/${setlist.id}`, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError(data.error ?? "Delete failed");

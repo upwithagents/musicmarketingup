@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Badge, Button, Input } from "@/components/ui";
+import { apiFetch } from "@/lib/basePath";
 
 interface PostDraft {
   id: string;
@@ -55,7 +56,7 @@ export default function CampaignsPage() {
   const [alwaysWeeks, setAlwaysWeeks] = useState("4");
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/campaigns");
+    const res = await apiFetch("/api/campaigns");
     const data = await res.json();
     setCampaigns(data.campaigns ?? []);
   }, []);
@@ -69,7 +70,7 @@ export default function CampaignsPage() {
     setError(null);
     setBusy(true);
     try {
-      const res = await fetch("/api/campaigns", {
+      const res = await apiFetch("/api/campaigns", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
