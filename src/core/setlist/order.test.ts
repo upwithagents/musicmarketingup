@@ -67,13 +67,18 @@ function buildHappyPathPool() {
 }
 
 describe("orderSetlist", () => {
-  it("is fully deterministic across repeated calls with the same input", () => {
+  it("is deterministic regardless of input order (tie-breaks form a total order)", () => {
     const { pool } = buildHappyPathPool();
     const poolSnapshotBefore = JSON.stringify(pool);
     const opts = { targetDurationSec: 2200 };
 
+    // Shuffle a copy (fixed reordering, not Math.random) so this actually
+    // exercises the tie-break rules rather than just calling a pure function
+    // twice with identical input.
+    const shuffled = pool.slice().reverse();
+
     const result1 = orderSetlist(pool, opts);
-    const result2 = orderSetlist(pool, opts);
+    const result2 = orderSetlist(shuffled, opts);
 
     expect(result2).toEqual(result1);
     // orderSetlist must not mutate its input.
@@ -142,24 +147,37 @@ describe("orderSetlist", () => {
     expect(lowestEnergyCount).toBe(2); // lowSingle (in build/peak) + the breather
   });
 
-  it("never places an isSingle song in the breather slot", () => {
-    const { pool, lowSingle } = buildHappyPathPool();
-    const result = orderSetlist(pool, { targetDurationSec: 2200 });
+  it("never places an isSingle song in the breather slot even when it has the lowest energy in the pool", () => {
+    // `single` has strictly lower energy than every non-single song here, so
+    // absent the isSingle exclusion it would be the one picked as the
+    // lowest-energy breather. `trueBreather` is the lowest-energy non-single
+    // and must be the one that actually lands in the breather slot.
+    const opener = song({ popularity: 2, isSingle: false, energy: 4 });
+    const closer = song({ popularity: 2, isSingle: false, energy: 5 });
+    const single = song({ popularity: 1, isSingle: true, energy: 1 });
+    const trueBreather = song({ popularity: 1, isSingle: false, energy: 2 });
+    const filler1 = song({ popularity: 1, isSingle: false, energy: 3 });
+    const filler2 = song({ popularity: 1, isSingle: false, energy: 4 });
+    const pool = [opener, closer, single, trueBreather, filler1, filler2];
 
-    // lowSingle has the lowest energy in the pool but is a single: it must
-    // still appear somewhere in main (nothing is dropped) but never as the
-    // sole minimum-energy pick surrounded appropriately as a breather. The
-    // strongest direct check: no isSingle song has main's minimum energy
-    // *and* sits at the unique breather-position index.
-    const minEnergy = Math.min(...result.main.map((s) => s.energy));
-    const candidatesAtMinEnergy = result.main.filter((s) => s.energy === minEnergy);
-    for (const candidate of candidatesAtMinEnergy) {
-      if (candidate.id === lowSingle.id) {
-        expect(candidate.isSingle).toBe(true); // it's present, just not "the" breather
-      }
-    }
-    // lowSingle must be present somewhere in main (never dropped).
-    expect(result.main.some((s) => s.id === lowSingle.id)).toBe(true);
+    const result = orderSetlist(pool, { targetDurationSec: 1200, encore: false });
+
+    // Locate the breather the same way the other positional test in this
+    // file does: find its index and confirm it sits in the mid-set slot
+    // (40-70% through main), not just that trueBreather exists somewhere.
+    const breatherIndex = result.main.findIndex((s) => s.id === trueBreather.id);
+    expect(breatherIndex).toBeGreaterThan(-1);
+    const ratio = breatherIndex / (result.main.length - 1);
+    expect(ratio).toBeGreaterThanOrEqual(0.4);
+    expect(ratio).toBeLessThanOrEqual(0.7);
+    expect(result.main[breatherIndex].isSingle).toBe(false);
+
+    // the single sits outside the breather slot's position window -- it was
+    // not chosen as the breather despite having the lowest energy overall.
+    const singleIndex = result.main.findIndex((s) => s.id === single.id);
+    expect(singleIndex).toBeGreaterThan(-1);
+    const singleRatio = singleIndex / (result.main.length - 1);
+    expect(singleRatio < 0.4 || singleRatio > 0.7).toBe(true);
   });
 
   it("keeps the peak section (after the breather) at non-decreasing energy", () => {

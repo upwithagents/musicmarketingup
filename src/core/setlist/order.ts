@@ -80,7 +80,7 @@ export function orderSetlist(
       warnings: ["no songs fit target duration"],
     };
   }
-  if (total < opts.targetDurationSec * 0.9) {
+  if (selection.length === pool.length && total < opts.targetDurationSec * 0.9) {
     warnings.push("pool shorter than target duration");
   }
 
