@@ -1,0 +1,17 @@
+# app data (SQLite DB) — private, never commit
+/data/
+
+# node
+node_modules/
+.next/
+/src/generated/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# misc
+.DS_Store
+*.log
+*.tsbuildinfo
