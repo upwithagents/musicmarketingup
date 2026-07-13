@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
 import { GET as profileGET, PUT as profilePUT } from "./profile/route";
 import { GET as songsGET, POST as songsPOST } from "./songs/route";
 import { PUT as songPUT, DELETE as songDELETE } from "./songs/[id]/route";
@@ -14,13 +13,6 @@ function jsonRequest(url: string, method: string, body?: unknown) {
 }
 
 describe("profile API", () => {
-  // The BandProfile row is a fixed-id singleton shared with other test files
-  // (e.g. src/lib/db.test.ts) against the same test.db — reset it after each
-  // test so this file doesn't leak state into others.
-  afterEach(async () => {
-    await prisma.bandProfile.deleteMany({ where: { id: "band" } });
-  });
-
   it("PUT then GET roundtrip", async () => {
     const putRes = await profilePUT(
       jsonRequest("http://localhost/api/profile", "PUT", {
@@ -162,5 +154,15 @@ describe("songs API", () => {
       { params: Promise.resolve({ id: "does-not-exist" }) },
     );
     expect(res.status).toBe(404);
+  });
+
+  it("PUT of a nonexistent song returns 404", async () => {
+    const res = await songPUT(
+      jsonRequest("http://localhost/api/songs/does-not-exist", "PUT", { energy: 2 }),
+      { params: Promise.resolve({ id: "does-not-exist" }) },
+    );
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBeTruthy();
   });
 });

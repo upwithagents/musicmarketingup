@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { Prisma } from "@/generated/prisma/client";
 import { parseSongUpdateInput } from "../validation";
+
+/** True when a Prisma error means "the record to update/delete doesn't exist". */
+function isRecordNotFound(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025";
+}
 
 export async function PUT(
   request: NextRequest,
@@ -15,8 +21,11 @@ export async function PUT(
   try {
     const song = await prisma.song.update({ where: { id }, data: parsed.value });
     return NextResponse.json({ song });
-  } catch {
-    return NextResponse.json({ error: "Song not found" }, { status: 404 });
+  } catch (err) {
+    if (isRecordNotFound(err)) {
+      return NextResponse.json({ error: "Song not found" }, { status: 404 });
+    }
+    throw err;
   }
 }
 
@@ -28,7 +37,10 @@ export async function DELETE(
   try {
     await prisma.song.delete({ where: { id } });
     return NextResponse.json({ deleted: true });
-  } catch {
-    return NextResponse.json({ error: "Song not found" }, { status: 404 });
+  } catch (err) {
+    if (isRecordNotFound(err)) {
+      return NextResponse.json({ error: "Song not found" }, { status: 404 });
+    }
+    throw err;
   }
 }
