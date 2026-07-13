@@ -15,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <header className="border-b border-gray-200">
+        <header className="border-b border-gray-200 print:hidden">
           <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
             <span className="text-lg font-semibold">🎤 MusicMarketingUp</span>
             <Nav />
