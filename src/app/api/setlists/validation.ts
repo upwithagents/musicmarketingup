@@ -38,6 +38,8 @@ function parseOrderEntries(value: unknown): Result<SetlistOrderEntry[]> {
     return { ok: false, error: "order must be an array" };
   }
   const order: SetlistOrderEntry[] = [];
+  const seenSongIds = new Set<string>();
+  let sawEncore = false;
   for (const entry of value) {
     if (
       typeof entry !== "object" ||
@@ -51,10 +53,23 @@ function parseOrderEntries(value: unknown): Result<SetlistOrderEntry[]> {
         error: "order entries must be { songId: string, section: 'main' | 'encore' }",
       };
     }
-    order.push({
-      songId: (entry as Record<string, unknown>).songId as string,
-      section: (entry as Record<string, unknown>).section as "main" | "encore",
-    });
+    const songId = (entry as Record<string, unknown>).songId as string;
+    const section = (entry as Record<string, unknown>).section as "main" | "encore";
+
+    // Contract: items are main first, then encore — positions are the actual
+    // play order, so an encore entry may never be followed by a main entry.
+    if (section === "encore") {
+      sawEncore = true;
+    } else if (sawEncore) {
+      return { ok: false, error: "encore items must come after all main items" };
+    }
+
+    if (seenSongIds.has(songId)) {
+      return { ok: false, error: "duplicate song in setlist order" };
+    }
+    seenSongIds.add(songId);
+
+    order.push({ songId, section });
   }
   return { ok: true, value: order };
 }

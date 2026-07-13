@@ -36,6 +36,16 @@ export async function PUT(
   }
   const { name, targetDurationSec, order } = parsed.value;
 
+  if (order && order.length > 0) {
+    const songIds = order.map((entry) => entry.songId);
+    const songs = await prisma.song.findMany({ where: { id: { in: songIds } } });
+    const foundIds = new Set(songs.map((s) => s.id));
+    const missing = songIds.find((id) => !foundIds.has(id));
+    if (missing !== undefined) {
+      return NextResponse.json({ error: `song not found: ${missing}` }, { status: 400 });
+    }
+  }
+
   try {
     const setlist = await prisma.$transaction(async (tx) => {
       const updateData: { name?: string; targetDurationSec?: number } = {};

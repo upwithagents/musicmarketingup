@@ -30,9 +30,24 @@ export async function POST(request: NextRequest) {
   }
   const { name, targetDurationSec, gigId, songIds } = parsed.value;
 
+  if (gigId !== null) {
+    const gig = await prisma.gig.findUnique({ where: { id: gigId } });
+    if (!gig) {
+      return NextResponse.json({ error: "gig not found" }, { status: 400 });
+    }
+  }
+
   const songs = songIds
     ? await prisma.song.findMany({ where: { id: { in: songIds } } })
     : await prisma.song.findMany();
+
+  if (songIds) {
+    const foundIds = new Set(songs.map((s) => s.id));
+    const missing = songIds.find((id) => !foundIds.has(id));
+    if (missing !== undefined) {
+      return NextResponse.json({ error: `song not found: ${missing}` }, { status: 400 });
+    }
+  }
 
   const pool = songs.map(songToSetlistSong);
   const ordered = orderSetlist(pool, { targetDurationSec });

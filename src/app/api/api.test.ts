@@ -243,11 +243,12 @@ describe("setlists API", () => {
     const id = postBody.setlist.id as string;
 
     // Rewrite to only 4 of the 6 songs, in a specific custom order.
+    // Contract: all "main" entries must come before any "encore" entry.
     const customOrder = [
       { songId: songs[3].id, section: "main" as const },
       { songId: songs[0].id, section: "main" as const },
-      { songId: songs[1].id, section: "encore" as const },
       { songId: songs[2].id, section: "main" as const },
+      { songId: songs[1].id, section: "encore" as const },
     ];
     const putRes = await setlistPUT(
       jsonRequest(`http://localhost/api/setlists/${id}`, "PUT", { order: customOrder }),
@@ -260,7 +261,82 @@ describe("setlists API", () => {
     expect(items).toHaveLength(4);
     expect(items.map((i) => i.position)).toEqual([1, 2, 3, 4]);
     expect(items.map((i) => i.song.id)).toEqual(customOrder.map((o) => o.songId));
-    expect(items.map((i) => i.section)).toEqual(customOrder.map((o) => o.section));
+    expect(items.map((i) => i.section)).toEqual(["main", "main", "main", "encore"]);
+  });
+
+  it("PUT with an encore item followed by a main item returns 400", async () => {
+    const songs = await createFixtureSongs();
+    const postRes = await setlistsPOST(
+      jsonRequest("http://localhost/api/setlists", "POST", {
+        name: `${SETLIST_PREFIX} Interleaved`,
+        targetDurationSec: 1200,
+        songIds: songs.map((s) => s.id),
+      }),
+    );
+    const postBody = await postRes.json();
+    const id = postBody.setlist.id as string;
+
+    // Invalid: an "encore" entry followed by a "main" entry.
+    const interleavedOrder = [
+      { songId: songs[3].id, section: "main" as const },
+      { songId: songs[0].id, section: "main" as const },
+      { songId: songs[1].id, section: "encore" as const },
+      { songId: songs[2].id, section: "main" as const },
+    ];
+    const putRes = await setlistPUT(
+      jsonRequest(`http://localhost/api/setlists/${id}`, "PUT", { order: interleavedOrder }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(putRes.status).toBe(400);
+    const body = await putRes.json();
+    expect(body.error).toBeTruthy();
+  });
+
+  it("PUT with a duplicate songId in the order array returns 400", async () => {
+    const songs = await createFixtureSongs();
+    const postRes = await setlistsPOST(
+      jsonRequest("http://localhost/api/setlists", "POST", {
+        name: `${SETLIST_PREFIX} DupSong`,
+        targetDurationSec: 1200,
+        songIds: songs.map((s) => s.id),
+      }),
+    );
+    const postBody = await postRes.json();
+    const id = postBody.setlist.id as string;
+
+    const dupOrder = [
+      { songId: songs[0].id, section: "main" as const },
+      { songId: songs[0].id, section: "main" as const },
+    ];
+    const putRes = await setlistPUT(
+      jsonRequest(`http://localhost/api/setlists/${id}`, "PUT", { order: dupOrder }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(putRes.status).toBe(400);
+    const body = await putRes.json();
+    expect(body.error).toBeTruthy();
+  });
+
+  it("PUT with a nonexistent songId in the order array returns 400 (not 500)", async () => {
+    const songs = await createFixtureSongs();
+    const postRes = await setlistsPOST(
+      jsonRequest("http://localhost/api/setlists", "POST", {
+        name: `${SETLIST_PREFIX} BogusSong`,
+        targetDurationSec: 1200,
+        songIds: songs.map((s) => s.id),
+      }),
+    );
+    const postBody = await postRes.json();
+    const id = postBody.setlist.id as string;
+
+    const bogusOrder = [{ songId: "does-not-exist-song", section: "main" as const }];
+    const putRes = await setlistPUT(
+      jsonRequest(`http://localhost/api/setlists/${id}`, "PUT", { order: bogusOrder }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(putRes.status).toBe(400);
+    const body = await putRes.json();
+    expect(body.error).toBeTruthy();
   });
 
   it("autoorder after a manual PUT reorder restores heuristic order", async () => {
@@ -362,6 +438,33 @@ describe("setlists API", () => {
       jsonRequest("http://localhost/api/setlists", "POST", { targetDurationSec: 600 }),
     );
     expect(res.status).toBe(400);
+  });
+
+  it("POST with a nonexistent gigId returns 400 (not 500)", async () => {
+    const res = await setlistsPOST(
+      jsonRequest("http://localhost/api/setlists", "POST", {
+        name: `${SETLIST_PREFIX} BogusGig`,
+        targetDurationSec: 600,
+        gigId: "does-not-exist-gig",
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBeTruthy();
+  });
+
+  it("POST with a nonexistent songId in songIds returns 400 (not 500)", async () => {
+    const songs = await createFixtureSongs();
+    const res = await setlistsPOST(
+      jsonRequest("http://localhost/api/setlists", "POST", {
+        name: `${SETLIST_PREFIX} BogusSongId`,
+        targetDurationSec: 600,
+        songIds: [songs[0].id, "does-not-exist-song"],
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBeTruthy();
   });
 
   it("PUT of a nonexistent setlist returns 404", async () => {
