@@ -15,7 +15,16 @@ import { GET as gigsGET, POST as gigsPOST } from "./gigs/route";
 import { GET as gigGET, PUT as gigPUT, DELETE as gigDELETE } from "./gigs/[id]/route";
 import { POST as promotePOST } from "./gigs/[id]/promote/route";
 import { PATCH as taskPATCH } from "./tasks/[id]/route";
-import { GIG_PROMO_TASKS, GIG_PROMO_POSTS } from "@/core/campaigns/templates";
+import { GET as campaignsGET, POST as campaignsPOST } from "./campaigns/route";
+import { PATCH as postPATCH } from "./posts/[id]/route";
+import { POST as refinePOST } from "./posts/[id]/refine/route";
+import { GET as aiStatusGET } from "./posts/ai-status/route";
+import {
+  GIG_PROMO_TASKS,
+  GIG_PROMO_POSTS,
+  RELEASE_TASKS,
+  RELEASE_POSTS,
+} from "@/core/campaigns/templates";
 
 function jsonRequest(url: string, method: string, body?: unknown) {
   return new NextRequest(url, {
@@ -785,5 +794,238 @@ describe("gigs + promote API", () => {
       { params: Promise.resolve({ id: "does-not-exist" }) },
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe("campaigns + posts API", () => {
+  const CAMPAIGN_PREFIX = "Zzz Campaign Test";
+  const BAND_NAME = "Zzz Campaign Test Band";
+
+  // Cleans up any Campaign/PostDraft/ChoreTask rows these tests create
+  // (dependency-ordered: posts + tasks reference campaignId, so delete them
+  // before the campaigns they belong to).
+  afterEach(async () => {
+    const campaigns = await prisma.campaign.findMany({
+      where: { name: { startsWith: CAMPAIGN_PREFIX } },
+    });
+    const campaignIds = campaigns.map((c) => c.id);
+    if (campaignIds.length > 0) {
+      await prisma.postDraft.deleteMany({ where: { campaignId: { in: campaignIds } } });
+      await prisma.choreTask.deleteMany({ where: { campaignId: { in: campaignIds } } });
+      await prisma.campaign.deleteMany({ where: { id: { in: campaignIds } } });
+    }
+  });
+
+  function utcMidnight(d: Date): Date {
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  }
+
+  function daysFromToday(days: number): Date {
+    const today = utcMidnight(new Date());
+    return new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + days));
+  }
+
+  it("POST single_release creates R-offset posts+tasks with releaseTitle/band substituted", async () => {
+    await profilePUT(
+      jsonRequest("http://localhost/api/profile", "PUT", {
+        name: BAND_NAME,
+        genre: "indie",
+        homeTown: "Springfield",
+        bio: "",
+        links: "{}",
+        audienceNotes: "",
+      }),
+    );
+
+    const releaseName = `${CAMPAIGN_PREFIX} Neon Skyline`;
+    const anchor = daysFromToday(60);
+    const res = await campaignsPOST(
+      jsonRequest("http://localhost/api/campaigns", "POST", {
+        type: "single_release",
+        name: releaseName,
+        anchorDate: anchor.toISOString(),
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.campaignId).toBeTruthy();
+    expect(body.postCount).toBe(RELEASE_POSTS.length);
+    expect(body.taskCount).toBe(RELEASE_TASKS.length);
+
+    const posts = await prisma.postDraft.findMany({ where: { campaignId: body.campaignId } });
+    expect(posts).toHaveLength(RELEASE_POSTS.length);
+    const releaseDayPost = posts.find((p) => p.title === "Release day");
+    expect(releaseDayPost).toBeTruthy();
+    expect(releaseDayPost!.body).toContain(releaseName);
+    expect(releaseDayPost!.body).toContain(BAND_NAME);
+    expect(releaseDayPost!.status).toBe("idea");
+
+    const tasks = await prisma.choreTask.findMany({ where: { campaignId: body.campaignId } });
+    expect(tasks).toHaveLength(RELEASE_TASKS.length);
+    expect(tasks.every((t) => t.status === "open")).toBe(true);
+  });
+
+  it("POST always_on weeks=2 creates 8 posts obeying the 1-in-5 promotion rule", async () => {
+    const anchor = daysFromToday(7);
+    const res = await campaignsPOST(
+      jsonRequest("http://localhost/api/campaigns", "POST", {
+        type: "always_on",
+        name: `${CAMPAIGN_PREFIX} AlwaysOn`,
+        anchorDate: anchor.toISOString(),
+        weeks: 2,
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.postCount).toBe(8);
+    expect(body.taskCount).toBe(0);
+
+    const posts = await prisma.postDraft.findMany({
+      where: { campaignId: body.campaignId },
+      orderBy: { date: "asc" },
+    });
+    expect(posts).toHaveLength(8);
+    const pillars = posts.map((p) => p.pillar);
+    expect(pillars.filter((_, i) => (i + 1) % 5 === 0).every((p) => p === "Promotion")).toBe(true);
+  });
+
+  it("POST with type gig_promo returns 400 (must go via the gig promote route)", async () => {
+    const res = await campaignsPOST(
+      jsonRequest("http://localhost/api/campaigns", "POST", {
+        type: "gig_promo",
+        name: `${CAMPAIGN_PREFIX} BadType`,
+        anchorDate: daysFromToday(30).toISOString(),
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBeTruthy();
+  });
+
+  it("POST with an unparseable anchorDate returns 400", async () => {
+    const res = await campaignsPOST(
+      jsonRequest("http://localhost/api/campaigns", "POST", {
+        type: "single_release",
+        name: `${CAMPAIGN_PREFIX} BadDate`,
+        anchorDate: "not-a-date",
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("POST always_on with a non-positive weeks returns 400", async () => {
+    const res = await campaignsPOST(
+      jsonRequest("http://localhost/api/campaigns", "POST", {
+        type: "always_on",
+        name: `${CAMPAIGN_PREFIX} BadWeeks`,
+        anchorDate: daysFromToday(7).toISOString(),
+        weeks: 0,
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("GET lists campaigns with their posts and tasks", async () => {
+    const res = await campaignsPOST(
+      jsonRequest("http://localhost/api/campaigns", "POST", {
+        type: "single_release",
+        name: `${CAMPAIGN_PREFIX} List`,
+        anchorDate: daysFromToday(60).toISOString(),
+      }),
+    );
+    const body = await res.json();
+
+    const listRes = await campaignsGET();
+    expect(listRes.status).toBe(200);
+    const listBody = await listRes.json();
+    const entry = (listBody.campaigns as { id: string; posts: unknown[]; tasks: unknown[] }[]).find(
+      (c) => c.id === body.campaignId,
+    );
+    expect(entry).toBeTruthy();
+    expect(entry!.posts).toHaveLength(RELEASE_POSTS.length);
+    expect(entry!.tasks).toHaveLength(RELEASE_TASKS.length);
+  });
+
+  it("PATCH post updates body and status", async () => {
+    const res = await campaignsPOST(
+      jsonRequest("http://localhost/api/campaigns", "POST", {
+        type: "single_release",
+        name: `${CAMPAIGN_PREFIX} PatchPost`,
+        anchorDate: daysFromToday(60).toISOString(),
+      }),
+    );
+    const body = await res.json();
+    const posts = await prisma.postDraft.findMany({ where: { campaignId: body.campaignId } });
+    const postId = posts[0].id;
+
+    const patchRes = await postPATCH(
+      jsonRequest(`http://localhost/api/posts/${postId}`, "PATCH", {
+        body: "Edited draft text",
+        status: "drafted",
+      }),
+      { params: Promise.resolve({ id: postId }) },
+    );
+    expect(patchRes.status).toBe(200);
+    const patchBody = await patchRes.json();
+    expect(patchBody.post.body).toBe("Edited draft text");
+    expect(patchBody.post.status).toBe("drafted");
+  });
+
+  it("PATCH post with an invalid status returns 400", async () => {
+    const res = await campaignsPOST(
+      jsonRequest("http://localhost/api/campaigns", "POST", {
+        type: "single_release",
+        name: `${CAMPAIGN_PREFIX} PatchBadStatus`,
+        anchorDate: daysFromToday(60).toISOString(),
+      }),
+    );
+    const body = await res.json();
+    const posts = await prisma.postDraft.findMany({ where: { campaignId: body.campaignId } });
+    const postId = posts[0].id;
+
+    const patchRes = await postPATCH(
+      jsonRequest(`http://localhost/api/posts/${postId}`, "PATCH", { status: "published" }),
+      { params: Promise.resolve({ id: postId }) },
+    );
+    expect(patchRes.status).toBe(400);
+  });
+
+  it("PATCH of a nonexistent post returns 404", async () => {
+    const res = await postPATCH(
+      jsonRequest("http://localhost/api/posts/does-not-exist", "PATCH", { status: "drafted" }),
+      { params: Promise.resolve({ id: "does-not-exist" }) },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  describe("AI refine (no network — ANTHROPIC_API_KEY forced unset)", () => {
+    const ORIGINAL_KEY = process.env.ANTHROPIC_API_KEY;
+
+    afterEach(() => {
+      if (ORIGINAL_KEY === undefined) {
+        delete process.env.ANTHROPIC_API_KEY;
+      } else {
+        process.env.ANTHROPIC_API_KEY = ORIGINAL_KEY;
+      }
+    });
+
+    it("GET /api/posts/ai-status returns {enabled:false} when no key is configured", async () => {
+      delete process.env.ANTHROPIC_API_KEY;
+      const res = await aiStatusGET();
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body).toEqual({ enabled: false });
+    });
+
+    it("POST refine returns 503 without hitting the network when no key is configured", async () => {
+      delete process.env.ANTHROPIC_API_KEY;
+      const res = await refinePOST(
+        jsonRequest("http://localhost/api/posts/does-not-exist/refine", "POST"),
+        { params: Promise.resolve({ id: "does-not-exist" }) },
+      );
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body.error).toBe("ANTHROPIC_API_KEY not configured");
+    });
   });
 });
