@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model BandProfile {
+  id            String @id @default("band") // single row, fixed id
+  name          String
+  genre         String @default("")
+  homeTown      String @default("")
+  bio           String @default("")
+  links         String @default("{}") // JSON: {website, instagram, tiktok, youtube, spotify, ...}
+  audienceNotes String @default("")
+  updatedAt     DateTime @updatedAt
+}
+
+model Song {
+  id           String  @id @default(cuid())
+  title        String
+  artist       String? // null/empty = original
+  isCover      Boolean @default(false)
+  isSingle     Boolean @default(false) // released/flagship original
+  durationSec  Int
+  bpm          Int?
+  key          String  @default("")
+  mood         String  @default("") // free tag: e.g. upbeat, melancholic
+  energy       Int     @default(3) // 1-5
+  popularity   Int     @default(2) // 1-3
+  vocalist     String  @default("")
+  notes        String  @default("")
+  createdAt    DateTime @default(now())
+  setlistItems SetlistItem[]
+}
+
+model Setlist {
+  id                String @id @default(cuid())
+  name              String
+  targetDurationSec Int    @default(3600)
+  notes             String @default("")
+  gigId             String? @unique
+  gig               Gig?   @relation(fields: [gigId], references: [id])
+  items             SetlistItem[]
+  createdAt         DateTime @default(now())
+}
+
+model SetlistItem {
+  id        String  @id @default(cuid())
+  setlistId String
+  setlist   Setlist @relation(fields: [setlistId], references: [id], onDelete: Cascade)
+  songId    String
+  song      Song    @relation(fields: [songId], references: [id], onDelete: Cascade)
+  position  Int
+  section   String  @default("main") // main | encore
+  note      String  @default("")
+  @@unique([setlistId, position])
+}
+
+model Gig {
+  id           String @id @default(cuid())
+  title        String
+  venue        String @default("")
+  city         String @default("")
+  date         DateTime
+  status       String @default("idea") // idea | contacted | confirmed | played | cancelled
+  fee          String @default("")
+  contactName  String @default("")
+  contactEmail String @default("")
+  notes        String @default("")
+  setlist      Setlist?
+  campaigns    Campaign[]
+  tasks        ChoreTask[]
+  createdAt    DateTime @default(now())
+}
+
+model Campaign {
+  id         String @id @default(cuid())
+  type       String // gig_promo | single_release | always_on
+  name       String
+  anchorDate DateTime
+  status     String @default("active") // active | done | cancelled
+  gigId      String?
+  gig        Gig?   @relation(fields: [gigId], references: [id])
+  posts      PostDraft[]
+  tasks      ChoreTask[]
+  createdAt  DateTime @default(now())
+}
+
+model PostDraft {
+  id         String @id @default(cuid())
+  date       DateTime
+  platform   String @default("") // "TikTok, Reels" — comma list
+  pillar     String @default("")
+  title      String
+  body       String @default("")
+  status     String @default("idea") // idea | drafted | posted | skipped
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}
+
+model ChoreTask {
+  id         String @id @default(cuid())
+  title      String
+  dueDate    DateTime?
+  status     String @default("open") // open | done
+  gigId      String?
+  gig        Gig?   @relation(fields: [gigId], references: [id], onDelete: Cascade)
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}

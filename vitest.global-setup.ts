@@ -12,7 +12,7 @@ export default function setup() {
   }
   mkdirSync(path.resolve(__dirname, "data"), { recursive: true });
   rmSync(path.resolve(__dirname, "data/test.db"), { force: true });
-  execSync("./node_modules/.bin/prisma db push --skip-generate", {
+  execSync("./node_modules/.bin/prisma db push", {
     cwd: __dirname,
     env: { ...process.env, DATABASE_URL: TEST_DB_URL },
     stdio: "pipe",
