@@ -83,7 +83,7 @@ model Campaign {
   anchorDate DateTime
   status     String @default("active") // active | done | cancelled
   gigId      String?
-  gig        Gig?   @relation(fields: [gigId], references: [id])
+  gig        Gig?   @relation(fields: [gigId], references: [id], onDelete: Cascade)
   posts      PostDraft[]
   tasks      ChoreTask[]
   createdAt  DateTime @default(now())

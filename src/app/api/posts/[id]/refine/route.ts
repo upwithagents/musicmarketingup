@@ -34,9 +34,16 @@ export async function POST(
   const profile = await prisma.bandProfile.findUnique({ where: { id: "band" } });
   const band = bandContextFromProfile(profile ?? FALLBACK_PROFILE);
 
-  const body = await refineDraft(
-    { body: post.body, pillar: post.pillar, platform: post.platform, band },
-    client,
-  );
-  return NextResponse.json({ body });
+  try {
+    const body = await refineDraft(
+      { body: post.body, pillar: post.pillar, platform: post.platform, band },
+      client,
+    );
+    return NextResponse.json({ body });
+  } catch {
+    return NextResponse.json(
+      { error: "Draft refinement failed — check your Anthropic key/model and try again." },
+      { status: 502 },
+    );
+  }
 }

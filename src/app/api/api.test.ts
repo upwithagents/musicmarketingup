@@ -737,6 +737,29 @@ describe("gigs + promote API", () => {
     expect(secondBody.error).toBeTruthy();
   });
 
+  it("DELETE cascades a gig's promo campaign, posts, and tasks (no orphans)", async () => {
+    const postRes = await createGig({ title: `${GIG_PREFIX} CascadeDelete` });
+    const gigId = (await postRes.json()).gig.id as string;
+
+    const promoteRes = await promotePOST(
+      jsonRequest(`http://localhost/api/gigs/${gigId}/promote`, "POST"),
+      { params: Promise.resolve({ id: gigId }) },
+    );
+    const { campaignId } = await promoteRes.json();
+    expect(await prisma.postDraft.count({ where: { campaignId } })).toBeGreaterThan(0);
+    expect(await prisma.choreTask.count({ where: { gigId } })).toBeGreaterThan(0);
+
+    const deleteRes = await gigDELETE(jsonRequest(`http://localhost/api/gigs/${gigId}`, "DELETE"), {
+      params: Promise.resolve({ id: gigId }),
+    });
+    expect(deleteRes.status).toBe(200);
+
+    // The gig's promo campaign — and its posts/tasks — must not linger orphaned.
+    expect(await prisma.campaign.count({ where: { id: campaignId } })).toBe(0);
+    expect(await prisma.postDraft.count({ where: { campaignId } })).toBe(0);
+    expect(await prisma.choreTask.count({ where: { gigId } })).toBe(0);
+  });
+
   it("task PATCH toggles status open -> done", async () => {
     const postRes = await createGig({ title: `${GIG_PREFIX} TaskToggle` });
     const postBody = await postRes.json();
