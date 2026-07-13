@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Nav } from "@/components/nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,7 +14,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <header className="border-b border-gray-200">
+          <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+            <span className="text-lg font-semibold">🎤 MusicMarketingUp</span>
+            <Nav />
+          </div>
+        </header>
+        <div className="mx-auto max-w-4xl px-4 py-8">{children}</div>
+      </body>
     </html>
   );
 }
