@@ -11,6 +11,11 @@ import {
   DELETE as setlistDELETE,
 } from "./setlists/[id]/route";
 import { POST as autoorderPOST } from "./setlists/[id]/autoorder/route";
+import { GET as gigsGET, POST as gigsPOST } from "./gigs/route";
+import { GET as gigGET, PUT as gigPUT, DELETE as gigDELETE } from "./gigs/[id]/route";
+import { POST as promotePOST } from "./gigs/[id]/promote/route";
+import { PATCH as taskPATCH } from "./tasks/[id]/route";
+import { GIG_PROMO_TASKS, GIG_PROMO_POSTS } from "@/core/campaigns/templates";
 
 function jsonRequest(url: string, method: string, body?: unknown) {
   return new NextRequest(url, {
@@ -478,6 +483,305 @@ describe("setlists API", () => {
   it("DELETE of a nonexistent setlist returns 404", async () => {
     const res = await setlistDELETE(
       jsonRequest("http://localhost/api/setlists/does-not-exist", "DELETE"),
+      { params: Promise.resolve({ id: "does-not-exist" }) },
+    );
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("gigs + promote API", () => {
+  const GIG_PREFIX = "Zzz Gig Test";
+  const BAND_NAME = "Zzz Promo Test Band";
+
+  // Cleans up any Gig/Campaign/PostDraft/ChoreTask rows these tests create.
+  // BandProfile is reset by the shared vitest.setup.ts afterEach.
+  afterEach(async () => {
+    const gigs = await prisma.gig.findMany({ where: { title: { startsWith: GIG_PREFIX } } });
+    const gigIds = gigs.map((g) => g.id);
+    if (gigIds.length > 0) {
+      const campaigns = await prisma.campaign.findMany({ where: { gigId: { in: gigIds } } });
+      const campaignIds = campaigns.map((c) => c.id);
+      if (campaignIds.length > 0) {
+        await prisma.postDraft.deleteMany({ where: { campaignId: { in: campaignIds } } });
+      }
+      await prisma.choreTask.deleteMany({ where: { gigId: { in: gigIds } } });
+      await prisma.campaign.deleteMany({ where: { gigId: { in: gigIds } } });
+      await prisma.gig.deleteMany({ where: { id: { in: gigIds } } });
+    }
+  });
+
+  function utcMidnight(d: Date): Date {
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  }
+
+  function daysFromToday(days: number): Date {
+    const today = utcMidnight(new Date());
+    return new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + days));
+  }
+
+  async function createGig(overrides: Partial<Record<string, unknown>> = {}) {
+    const res = await gigsPOST(
+      jsonRequest("http://localhost/api/gigs", "POST", {
+        title: `${GIG_PREFIX} Roundtrip`,
+        venue: "The Venue",
+        city: "Springfield",
+        date: daysFromToday(28).toISOString(),
+        status: "confirmed",
+        fee: "$200",
+        contactName: "Alex Booker",
+        contactEmail: "alex@example.com",
+        ...overrides,
+      }),
+    );
+    return res;
+  }
+
+  it("POST creates a gig -> GET includes it -> PUT changes status -> DELETE removes", async () => {
+    const postRes = await createGig();
+    expect(postRes.status).toBe(201);
+    const postBody = await postRes.json();
+    expect(postBody.gig.title).toBe(`${GIG_PREFIX} Roundtrip`);
+    expect(postBody.gig.status).toBe("confirmed");
+    const id = postBody.gig.id as string;
+
+    const getRes = await gigGET(jsonRequest(`http://localhost/api/gigs/${id}`, "GET"), {
+      params: Promise.resolve({ id }),
+    });
+    expect(getRes.status).toBe(200);
+    const getBody = await getRes.json();
+    expect(getBody.gig.id).toBe(id);
+    expect(Array.isArray(getBody.gig.tasks)).toBe(true);
+    expect(Array.isArray(getBody.gig.campaigns)).toBe(true);
+
+    const listRes = await gigsGET();
+    const listBody = await listRes.json();
+    expect(listBody.gigs.some((g: { id: string }) => g.id === id)).toBe(true);
+
+    const putRes = await gigPUT(
+      jsonRequest(`http://localhost/api/gigs/${id}`, "PUT", { status: "played" }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(putRes.status).toBe(200);
+    const putBody = await putRes.json();
+    expect(putBody.gig.status).toBe("played");
+
+    const deleteRes = await gigDELETE(jsonRequest(`http://localhost/api/gigs/${id}`, "DELETE"), {
+      params: Promise.resolve({ id }),
+    });
+    expect(deleteRes.status).toBe(200);
+
+    const getAfterDelete = await gigGET(jsonRequest(`http://localhost/api/gigs/${id}`, "GET"), {
+      params: Promise.resolve({ id }),
+    });
+    expect(getAfterDelete.status).toBe(404);
+  });
+
+  it("POST with an invalid status returns 400", async () => {
+    const res = await gigsPOST(
+      jsonRequest("http://localhost/api/gigs", "POST", {
+        title: `${GIG_PREFIX} BadStatus`,
+        date: daysFromToday(10).toISOString(),
+        status: "maybe",
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBeTruthy();
+  });
+
+  it("POST with an unparseable date returns 400", async () => {
+    const res = await gigsPOST(
+      jsonRequest("http://localhost/api/gigs", "POST", {
+        title: `${GIG_PREFIX} BadDate`,
+        date: "not-a-date",
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("POST normalizes a time-bearing date to UTC midnight", async () => {
+    const res = await gigsPOST(
+      jsonRequest("http://localhost/api/gigs", "POST", {
+        title: `${GIG_PREFIX} TimeOfDay`,
+        date: "2026-08-10T15:30:00.000Z",
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.gig.date).toBe("2026-08-10T00:00:00.000Z");
+  });
+
+  it("PUT of a nonexistent gig returns 404", async () => {
+    const res = await gigPUT(
+      jsonRequest("http://localhost/api/gigs/does-not-exist", "PUT", { status: "played" }),
+      { params: Promise.resolve({ id: "does-not-exist" }) },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("DELETE of a nonexistent gig returns 404", async () => {
+    const res = await gigDELETE(
+      jsonRequest("http://localhost/api/gigs/does-not-exist", "DELETE"),
+      { params: Promise.resolve({ id: "does-not-exist" }) },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("promote is 404 for a nonexistent gig", async () => {
+    const res = await promotePOST(
+      jsonRequest("http://localhost/api/gigs/does-not-exist/promote", "POST"),
+      { params: Promise.resolve({ id: "does-not-exist" }) },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("promote creates the expected task/post counts, clamps past-offset dates to today, and substitutes venue/band into posts", async () => {
+    await profilePUT(
+      jsonRequest("http://localhost/api/profile", "PUT", {
+        name: BAND_NAME,
+        genre: "indie",
+        homeTown: "Springfield",
+        bio: "",
+        links: "{}",
+        audienceNotes: "",
+      }),
+    );
+
+    // Gig is only 10 days out, so early-offset tasks (-42..-14) land before
+    // today and must clamp; late-offset tasks (-7..+7) stay in the future.
+    const gigDate = daysFromToday(10);
+    const postRes = await createGig({
+      title: `${GIG_PREFIX} Promote`,
+      venue: "The Venue",
+      city: "Springfield",
+      date: gigDate.toISOString(),
+    });
+    const postBody = await postRes.json();
+    const gigId = postBody.gig.id as string;
+
+    const promoteRes = await promotePOST(
+      jsonRequest(`http://localhost/api/gigs/${gigId}/promote`, "POST"),
+      { params: Promise.resolve({ id: gigId }) },
+    );
+    expect(promoteRes.status).toBe(201);
+    const promoteBody = await promoteRes.json();
+    expect(promoteBody.campaignId).toBeTruthy();
+    expect(promoteBody.taskCount).toBe(GIG_PROMO_TASKS.length);
+    expect(promoteBody.postCount).toBe(GIG_PROMO_POSTS.length);
+
+    const getRes = await gigGET(jsonRequest(`http://localhost/api/gigs/${gigId}`, "GET"), {
+      params: Promise.resolve({ id: gigId }),
+    });
+    const getBody = await getRes.json();
+    const tasks = getBody.gig.tasks as { title: string; dueDate: string; status: string }[];
+    expect(tasks).toHaveLength(GIG_PROMO_TASKS.length);
+    expect(tasks.every((t) => t.status === "open")).toBe(true);
+
+    const today = utcMidnight(new Date());
+    const clampedOffsets = GIG_PROMO_TASKS.filter((t) => t.offsetDays <= -14);
+    expect(clampedOffsets.length).toBeGreaterThan(0);
+    const clampedDueDates = new Set(
+      tasks
+        .filter((t) => clampedOffsets.some((tpl) => tpl.title === t.title))
+        .map((t) => new Date(t.dueDate).toISOString()),
+    );
+    expect(clampedDueDates.size).toBe(1);
+    expect([...clampedDueDates][0]).toBe(today.toISOString());
+
+    const campaign = getBody.gig.campaigns.find(
+      (c: { type: string }) => c.type === "gig_promo",
+    );
+    expect(campaign).toBeTruthy();
+    expect(campaign.name).toBe(`Promo: ${GIG_PREFIX} Promote`);
+
+    const posts = await prisma.postDraft.findMany({ where: { campaignId: campaign.id } });
+    expect(posts).toHaveLength(GIG_PROMO_POSTS.length);
+    const announcePost = posts.find((p) => p.title === "Announce the gig");
+    expect(announcePost).toBeTruthy();
+    expect(announcePost!.body).toContain("The Venue");
+    expect(announcePost!.body).toContain(BAND_NAME);
+    expect(announcePost!.body).toContain("Springfield");
+    // {{link}} has no known value (Gig has no link field), so it's left
+    // intact rather than replaced with an empty string — that's the
+    // documented renderTemplate contract, not a bug.
+    expect(announcePost!.body).toContain("{{link}}");
+    expect(announcePost!.status).toBe("idea");
+  });
+
+  it("second promote for the same gig returns 409", async () => {
+    const postRes = await createGig({ title: `${GIG_PREFIX} DoublePromote` });
+    const postBody = await postRes.json();
+    const gigId = postBody.gig.id as string;
+
+    const firstRes = await promotePOST(
+      jsonRequest(`http://localhost/api/gigs/${gigId}/promote`, "POST"),
+      { params: Promise.resolve({ id: gigId }) },
+    );
+    expect(firstRes.status).toBe(201);
+
+    const secondRes = await promotePOST(
+      jsonRequest(`http://localhost/api/gigs/${gigId}/promote`, "POST"),
+      { params: Promise.resolve({ id: gigId }) },
+    );
+    expect(secondRes.status).toBe(409);
+    const secondBody = await secondRes.json();
+    expect(secondBody.error).toBeTruthy();
+  });
+
+  it("task PATCH toggles status open -> done", async () => {
+    const postRes = await createGig({ title: `${GIG_PREFIX} TaskToggle` });
+    const postBody = await postRes.json();
+    const gigId = postBody.gig.id as string;
+
+    const promoteRes = await promotePOST(
+      jsonRequest(`http://localhost/api/gigs/${gigId}/promote`, "POST"),
+      { params: Promise.resolve({ id: gigId }) },
+    );
+    const promoteBody = await promoteRes.json();
+    expect(promoteBody.taskCount).toBeGreaterThan(0);
+
+    const getRes = await gigGET(jsonRequest(`http://localhost/api/gigs/${gigId}`, "GET"), {
+      params: Promise.resolve({ id: gigId }),
+    });
+    const getBody = await getRes.json();
+    const taskId = getBody.gig.tasks[0].id as string;
+    expect(getBody.gig.tasks[0].status).toBe("open");
+
+    const patchRes = await taskPATCH(
+      jsonRequest(`http://localhost/api/tasks/${taskId}`, "PATCH", { status: "done" }),
+      { params: Promise.resolve({ id: taskId }) },
+    );
+    expect(patchRes.status).toBe(200);
+    const patchBody = await patchRes.json();
+    expect(patchBody.task.status).toBe("done");
+  });
+
+  it("task PATCH with an invalid status returns 400", async () => {
+    const postRes = await createGig({ title: `${GIG_PREFIX} TaskBadStatus` });
+    const postBody = await postRes.json();
+    const gigId = postBody.gig.id as string;
+    const promoteRes = await promotePOST(
+      jsonRequest(`http://localhost/api/gigs/${gigId}/promote`, "POST"),
+      { params: Promise.resolve({ id: gigId }) },
+    );
+    const promoteBody = await promoteRes.json();
+    const getRes = await gigGET(jsonRequest(`http://localhost/api/gigs/${gigId}`, "GET"), {
+      params: Promise.resolve({ id: gigId }),
+    });
+    const getBody = await getRes.json();
+    const taskId = getBody.gig.tasks[0].id as string;
+
+    const res = await taskPATCH(
+      jsonRequest(`http://localhost/api/tasks/${taskId}`, "PATCH", { status: "in_progress" }),
+      { params: Promise.resolve({ id: taskId }) },
+    );
+    expect(res.status).toBe(400);
+    expect(promoteBody.campaignId).toBeTruthy();
+  });
+
+  it("task PATCH of a nonexistent task returns 404", async () => {
+    const res = await taskPATCH(
+      jsonRequest("http://localhost/api/tasks/does-not-exist", "PATCH", { status: "done" }),
       { params: Promise.resolve({ id: "does-not-exist" }) },
     );
     expect(res.status).toBe(404);
