@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Badge, Button, Select } from "@/components/ui";
 
@@ -260,9 +260,9 @@ export default function SetlistDetailPage() {
               const isFirstEncore =
                 item.section === "encore" && (index === 0 || items[index - 1].section === "main");
               return (
-                <>
+                <Fragment key={item.id}>
                   {isFirstEncore && (
-                    <tr key={`${item.id}-divider`} className="print:break-inside-avoid">
+                    <tr className="print:break-inside-avoid">
                       <td colSpan={6} className="py-3">
                         <div className="border-t-2 border-dashed border-gray-400 pt-2 text-center text-xs font-bold uppercase tracking-widest text-gray-500 print:text-base">
                           Encore
@@ -270,7 +270,7 @@ export default function SetlistDetailPage() {
                       </td>
                     </tr>
                   )}
-                  <tr key={item.id} className="border-b border-gray-100 print:break-inside-avoid">
+                  <tr className="border-b border-gray-100 print:break-inside-avoid">
                     <td className="py-2 pr-3 text-gray-400">{index + 1}</td>
                     <td className="py-2 pr-3">
                       <span
@@ -299,7 +299,7 @@ export default function SetlistDetailPage() {
                       </Button>
                     </td>
                   </tr>
-                </>
+                </Fragment>
               );
             })}
           </tbody>

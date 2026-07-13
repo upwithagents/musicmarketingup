@@ -271,9 +271,6 @@ export default function SetlistsPage() {
                 <td className="py-2 pr-3">{setlist.itemCount}</td>
                 <td className="py-2 pr-3">{formatDuration(setlist.totalDurationSec)}</td>
                 <td className="py-2 pr-3 whitespace-nowrap">
-                  <Link href={`/setlists/${setlist.id}`}>
-                    <Button disabled={busy}>Open</Button>
-                  </Link>{" "}
                   <Button variant="danger" onClick={() => deleteSetlist(setlist)} disabled={busy}>
                     Delete
                   </Button>
