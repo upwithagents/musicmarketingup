@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Nav } from "@/components/nav";
+import { PortalChrome } from "@/components/PortalChrome";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <PortalChrome />
         <header className="border-b border-gray-200 print:hidden">
           <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
             <span className="text-lg font-semibold">🎤 MusicMarketingUp</span>
