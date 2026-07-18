@@ -17,7 +17,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <PortalChrome />
-        <header className="border-b border-gray-200 print:hidden">
+        <header className="border-b border-[var(--border)] print:hidden">
           <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
             <span className="text-lg font-semibold">🎤 MusicMarketingUp</span>
             <Nav />
