@@ -22,7 +22,7 @@ export function PortalChrome() {
   if (!context) return null;
 
   return (
-    <div data-portal-chrome>
+    <div data-portal-chrome className="print:hidden">
       <PortalHeader
         currentSlug="musicmarketingup"
         apps={context.apps}

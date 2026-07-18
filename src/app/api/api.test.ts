@@ -19,6 +19,12 @@ import { GET as campaignsGET, POST as campaignsPOST } from "./campaigns/route";
 import { PATCH as postPATCH } from "./posts/[id]/route";
 import { POST as refinePOST } from "./posts/[id]/refine/route";
 import { GET as aiStatusGET } from "./posts/ai-status/route";
+import { GET as epkGET, PUT as epkPUT } from "./epk/route";
+import { POST as epkPhotoPOST } from "./epk/photos/route";
+import {
+  DELETE as epkPhotoDELETE,
+} from "./epk/photos/[id]/route";
+import { GET as epkPhotoFileGET } from "./epk/photos/[id]/file/route";
 import {
   GIG_PROMO_TASKS,
   GIG_PROMO_POSTS,
@@ -1050,5 +1056,182 @@ describe("campaigns + posts API", () => {
       const body = await res.json();
       expect(body.error).toBe("ANTHROPIC_API_KEY not configured");
     });
+  });
+});
+
+describe("epk API", () => {
+  // EPK tables are app-wide singletons/collections; tests run against
+  // data/test.db (and UPLOADS_DIR=data/test-uploads), so wiping them keeps
+  // the suite hermetic without touching other describe blocks' fixtures.
+  afterEach(async () => {
+    await prisma.epkPhoto.deleteMany();
+    await prisma.pressQuote.deleteMany();
+    await prisma.mediaLink.deleteMany();
+    await prisma.epk.deleteMany();
+    const { rm } = await import("node:fs/promises");
+    await rm("./data/test-uploads", { recursive: true, force: true });
+  });
+
+  const FULL_DOC = {
+    headline: "Dream-pop with teeth.",
+    shortBio: "Short bio text.",
+    longBio: "Much longer bio text.",
+    pressContactName: "Alex Booker",
+    pressContactEmail: "press@example.com",
+    quotes: [
+      { quote: "Stunning debut.", source: "Test Weekly", url: "" },
+      { quote: "Best live act in town.", source: "Blog", url: "https://blog.example/x" },
+    ],
+    media: [
+      { kind: "track", title: "Neon Rain", url: "https://sp.example/neon", note: "single" },
+      { kind: "video", title: "Live set", url: "https://yt.example/live", note: "" },
+    ],
+  };
+
+  it("GET empty state returns nulls/empties plus band context", async () => {
+    const res = await epkGET();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.epk).toBeNull();
+    expect(body.quotes).toEqual([]);
+    expect(body.media).toEqual([]);
+    expect(body.photos).toEqual([]);
+    expect(typeof body.band.name).toBe("string");
+  });
+
+  it("PUT then GET roundtrip with ordered quotes and media", async () => {
+    const putRes = await epkPUT(jsonRequest("http://localhost/api/epk", "PUT", FULL_DOC));
+    expect(putRes.status).toBe(200);
+
+    const getRes = await epkGET();
+    const body = await getRes.json();
+    expect(body.epk.headline).toBe("Dream-pop with teeth.");
+    expect(body.epk.pressContactEmail).toBe("press@example.com");
+    expect(body.quotes.map((q: { quote: string }) => q.quote)).toEqual([
+      "Stunning debut.",
+      "Best live act in town.",
+    ]);
+    expect(body.quotes.map((q: { position: number }) => q.position)).toEqual([1, 2]);
+    expect(body.media.map((m: { title: string }) => m.title)).toEqual(["Neon Rain", "Live set"]);
+    expect(body.media[0].kind).toBe("track");
+  });
+
+  it("PUT fully replaces quotes and media (no leftovers)", async () => {
+    await epkPUT(jsonRequest("http://localhost/api/epk", "PUT", FULL_DOC));
+    const putRes = await epkPUT(
+      jsonRequest("http://localhost/api/epk", "PUT", {
+        ...FULL_DOC,
+        quotes: [{ quote: "Only quote now.", source: "", url: "" }],
+        media: [],
+      }),
+    );
+    expect(putRes.status).toBe(200);
+
+    const body = await (await epkGET()).json();
+    expect(body.quotes).toHaveLength(1);
+    expect(body.quotes[0].quote).toBe("Only quote now.");
+    expect(body.quotes[0].position).toBe(1);
+    expect(body.media).toEqual([]);
+  });
+
+  it("PUT with an empty quote text returns 400", async () => {
+    const res = await epkPUT(
+      jsonRequest("http://localhost/api/epk", "PUT", {
+        ...FULL_DOC,
+        quotes: [{ quote: "  ", source: "x", url: "" }],
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT with a bad media kind returns 400", async () => {
+    const res = await epkPUT(
+      jsonRequest("http://localhost/api/epk", "PUT", {
+        ...FULL_DOC,
+        media: [{ kind: "podcast", title: "x", url: "https://x.example", note: "" }],
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT with media missing a url returns 400 and quotes as non-array returns 400", async () => {
+    const noUrl = await epkPUT(
+      jsonRequest("http://localhost/api/epk", "PUT", {
+        ...FULL_DOC,
+        media: [{ kind: "track", title: "x", url: "", note: "" }],
+      }),
+    );
+    expect(noUrl.status).toBe(400);
+
+    const badQuotes = await epkPUT(
+      jsonRequest("http://localhost/api/epk", "PUT", { ...FULL_DOC, quotes: "nope" }),
+    );
+    expect(badQuotes.status).toBe(400);
+  });
+
+  function photoRequest(name: string, type: string, bytes: Uint8Array<ArrayBuffer>, caption?: string) {
+    const fd = new FormData();
+    fd.append("file", new File([bytes], name, { type }));
+    if (caption !== undefined) fd.append("caption", caption);
+    return new NextRequest("http://localhost/api/epk/photos", { method: "POST", body: fd });
+  }
+
+  it("photo upload stores a row and a file; file route streams it; delete removes both", async () => {
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]);
+    const postRes = await epkPhotoPOST(photoRequest("band.png", "image/png", bytes, "Live shot"));
+    expect(postRes.status).toBe(201);
+    const { photo } = await postRes.json();
+    expect(photo.caption).toBe("Live shot");
+    expect(photo.filename.endsWith(".png")).toBe(true);
+
+    const { readFile } = await import("node:fs/promises");
+    const onDisk = await readFile(`./data/test-uploads/${photo.filename}`);
+    expect(new Uint8Array(onDisk)).toEqual(bytes);
+
+    const fileRes = await epkPhotoFileGET(
+      new NextRequest(`http://localhost/api/epk/photos/${photo.id}/file`),
+      { params: Promise.resolve({ id: photo.id }) },
+    );
+    expect(fileRes.status).toBe(200);
+    expect(fileRes.headers.get("content-type")).toBe("image/png");
+    expect(new Uint8Array(await fileRes.arrayBuffer())).toEqual(bytes);
+
+    const delRes = await epkPhotoDELETE(
+      new NextRequest(`http://localhost/api/epk/photos/${photo.id}`, { method: "DELETE" }),
+      { params: Promise.resolve({ id: photo.id }) },
+    );
+    expect(delRes.status).toBe(200);
+    expect(await prisma.epkPhoto.count()).toBe(0);
+    await expect(readFile(`./data/test-uploads/${photo.filename}`)).rejects.toThrow();
+  });
+
+  it("photo upload rejects a non-image type with 400", async () => {
+    const res = await epkPhotoPOST(
+      photoRequest("notes.txt", "text/plain", new Uint8Array([1, 2, 3])),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("photo upload rejects a missing file with 400", async () => {
+    const fd = new FormData();
+    fd.append("caption", "no file here");
+    const res = await epkPhotoPOST(
+      new NextRequest("http://localhost/api/epk/photos", { method: "POST", body: fd }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("photo file/delete routes return 404 for an unknown id", async () => {
+    const fileRes = await epkPhotoFileGET(
+      new NextRequest("http://localhost/api/epk/photos/nope/file"),
+      { params: Promise.resolve({ id: "nope" }) },
+    );
+    expect(fileRes.status).toBe(404);
+
+    const delRes = await epkPhotoDELETE(
+      new NextRequest("http://localhost/api/epk/photos/nope", { method: "DELETE" }),
+      { params: Promise.resolve({ id: "nope" }) },
+    );
+    expect(delRes.status).toBe(404);
   });
 });

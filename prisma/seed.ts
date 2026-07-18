@@ -267,13 +267,90 @@ async function main() {
     },
   });
 
-  const [bandCount, songCount, gigCount] = await Promise.all([
-    prisma.bandProfile.count(),
-    prisma.song.count(),
-    prisma.gig.count(),
-  ]);
+  const epkScalars = {
+    headline: "Dream-pop with teeth, straight out of Portland basements.",
+    shortBio:
+      "The Midnight Placeholders are a four-piece indie rock band blending " +
+      "shimmering dream-pop textures with a driving live show. Their debut " +
+      "single \"Neon Rain\" earned college-radio rotation across the Northwest.",
+    longBio:
+      "Formed in a Portland basement in 2024, The Midnight Placeholders " +
+      "grew from bedroom demos into one of the city's most reliable live " +
+      "draws. Fronted by Mara's soaring vocals over Jonah's jangly guitar " +
+      "work, the band pairs melancholic songwriting with an energetic, " +
+      "singalong-heavy set. Their singles \"Neon Rain\" and \"Static " +
+      "Hearts\" anchor a debut album due this fall, recorded live to tape " +
+      "over one sleepless week.",
+    pressContactName: "Alex Booker",
+    pressContactEmail: "press@midnightplaceholders.example",
+  };
+  await prisma.epk.upsert({
+    where: { id: "epk" },
+    update: epkScalars,
+    create: { id: "epk", ...epkScalars },
+  });
+
+  const quotes = [
+    {
+      id: "quote-weekly",
+      quote: "The most confident debut set we've seen all year.",
+      source: "Portland Weekly",
+      url: "",
+      position: 1,
+    },
+    {
+      id: "quote-blog",
+      quote: "Neon Rain sounds like The Cure raised on Pacific Northwest rain.",
+      source: "Cascadia Sounds blog",
+      url: "https://cascadiasounds.example/reviews/neon-rain",
+      position: 2,
+    },
+  ];
+  for (const q of quotes) {
+    await prisma.pressQuote.upsert({ where: { id: q.id }, update: q, create: q });
+  }
+
+  const media = [
+    {
+      id: "media-neon-rain",
+      kind: "track",
+      title: "Neon Rain (single)",
+      url: "https://open.spotify.example/track/neon-rain",
+      note: "Flagship single",
+      position: 1,
+    },
+    {
+      id: "media-static-hearts",
+      kind: "track",
+      title: "Static Hearts (single)",
+      url: "https://open.spotify.example/track/static-hearts",
+      note: "",
+      position: 2,
+    },
+    {
+      id: "media-live-kino",
+      kind: "video",
+      title: "Live at Kino Club (full set)",
+      url: "https://youtube.example/watch?v=live-kino",
+      note: "Live video for bookers",
+      position: 3,
+    },
+  ];
+  for (const m of media) {
+    await prisma.mediaLink.upsert({ where: { id: m.id }, update: m, create: m });
+  }
+
+  const [bandCount, songCount, gigCount, quoteCount, mediaCount] =
+    await Promise.all([
+      prisma.bandProfile.count(),
+      prisma.song.count(),
+      prisma.gig.count(),
+      prisma.pressQuote.count(),
+      prisma.mediaLink.count(),
+    ]);
   console.log(
-    `Seed complete: ${bandCount} band, ${songCount} songs, ${gigCount} gig.`,
+    `Seed complete: ${bandCount} band, ${songCount} songs, ${gigCount} gig, ` +
+      `EPK with ${quoteCount} quotes + ${mediaCount} media links.`,
   );
 }
 

@@ -113,3 +113,38 @@ model ChoreTask {
   campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
 }
+
+model Epk {
+  id                String @id @default("epk") // single row, fixed id
+  headline          String @default("")
+  shortBio          String @default("")
+  longBio           String @default("")
+  pressContactName  String @default("")
+  pressContactEmail String @default("")
+  updatedAt         DateTime @updatedAt
+}
+
+model PressQuote {
+  id       String @id @default(cuid())
+  quote    String
+  source   String @default("")
+  url      String @default("")
+  position Int    @default(0)
+}
+
+model MediaLink {
+  id       String @id @default(cuid())
+  kind     String // track | video
+  title    String
+  url      String
+  note     String @default("")
+  position Int    @default(0)
+}
+
+model EpkPhoto {
+  id        String @id @default(cuid())
+  filename  String // stored under data/uploads/
+  caption   String @default("")
+  position  Int    @default(0)
+  createdAt DateTime @default(now())
+}
