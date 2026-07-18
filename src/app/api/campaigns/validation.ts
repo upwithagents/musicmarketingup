@@ -1,6 +1,8 @@
 // Shared validation for the Campaigns API. gig_promo campaigns are created
 // only via the gig promote route, so they are rejected here.
 
+import { parseDateInput as parseDate } from "@/lib/dates";
+
 export const CAMPAIGN_TYPES = ["single_release", "always_on"] as const;
 export type CampaignType = (typeof CAMPAIGN_TYPES)[number];
 
@@ -17,14 +19,6 @@ const DEFAULT_ALWAYS_ON_WEEKS = 4;
 
 function isPlainObject(body: unknown): body is Record<string, unknown> {
   return typeof body === "object" && body !== null && !Array.isArray(body);
-}
-
-/** Parses a date input into a UTC-midnight Date, returning null if unparseable. */
-function parseDate(value: unknown): Date | null {
-  if (typeof value !== "string" && !(value instanceof Date)) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 export function parseCampaignCreateInput(body: unknown): Result<CampaignCreateData> {

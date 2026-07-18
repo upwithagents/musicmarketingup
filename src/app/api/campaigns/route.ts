@@ -6,22 +6,9 @@ import {
   type ExpandContext,
   type ExpandedCampaign,
 } from "@/core/campaigns/expand";
-import { bandContextFromProfile } from "@/core/content/copy";
+import { getBandContext } from "@/lib/bandContext";
+import { utcMidnight } from "@/lib/dates";
 import { parseCampaignCreateInput } from "./validation";
-
-/** Fallback band context used when no BandProfile row exists yet. */
-const FALLBACK_PROFILE = {
-  name: "Your Band",
-  genre: "",
-  homeTown: "",
-  bio: "",
-  audienceNotes: "",
-  links: "{}",
-};
-
-function utcMidnight(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
 
 export async function GET() {
   const campaigns = await prisma.campaign.findMany({
@@ -42,8 +29,7 @@ export async function POST(request: NextRequest) {
   }
   const { type, name, anchorDate, weeks } = parsed.value;
 
-  const profile = await prisma.bandProfile.findUnique({ where: { id: "band" } });
-  const bandContext = bandContextFromProfile(profile ?? FALLBACK_PROFILE);
+  const bandContext = await getBandContext();
 
   const today = utcMidnight(new Date());
   let expanded: ExpandedCampaign;

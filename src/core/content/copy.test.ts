@@ -51,4 +51,22 @@ describe("bandContextFromProfile", () => {
 
     expect(ctx.links).toEqual({});
   });
+
+  it("drops non-string link values instead of leaking them through", () => {
+    const ctx = bandContextFromProfile({
+      name: "The Ramps",
+      genre: "Indie Rock",
+      homeTown: "Chicago",
+      bio: "",
+      audienceNotes: "",
+      links: JSON.stringify({
+        instagram: "theramps",
+        followers: 1234,
+        nested: { url: "x" },
+        spotify: "ramps-official",
+      }),
+    });
+
+    expect(ctx.links).toEqual({ instagram: "theramps", spotify: "ramps-official" });
+  });
 });

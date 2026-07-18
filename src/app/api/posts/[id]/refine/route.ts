@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { anthropicClient, refineDraft } from "@/core/ai/refine";
-import { bandContextFromProfile } from "@/core/content/copy";
-
-/** Fallback band context used when no BandProfile row exists yet. */
-const FALLBACK_PROFILE = {
-  name: "Your Band",
-  genre: "",
-  homeTown: "",
-  bio: "",
-  audienceNotes: "",
-  links: "{}",
-};
+import { getBandContext } from "@/lib/bandContext";
 
 export async function POST(
   _request: NextRequest,
@@ -31,8 +21,7 @@ export async function POST(
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
 
-  const profile = await prisma.bandProfile.findUnique({ where: { id: "band" } });
-  const band = bandContextFromProfile(profile ?? FALLBACK_PROFILE);
+  const band = await getBandContext();
 
   try {
     const body = await refineDraft(

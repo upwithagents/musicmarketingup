@@ -1,6 +1,8 @@
 // Shared validation for the Gig API routes (POST full-create, PUT partial-update).
 // Not a route file — Next only treats `route.ts`/`page.tsx`/etc. as special.
 
+import { parseDateInput as parseDate } from "@/lib/dates";
+
 export const GIG_STATUSES = ["idea", "contacted", "confirmed", "played", "cancelled"] as const;
 export type GigStatus = (typeof GIG_STATUSES)[number];
 
@@ -29,19 +31,6 @@ function validateStatus(value: unknown): string | null {
     return `status must be one of: ${GIG_STATUSES.join(", ")}`;
   }
   return null;
-}
-
-/**
- * Parses a date input into a UTC-midnight Date, returning null if unparseable.
- * Normalizing here (rather than trusting the caller to send midnight) keeps
- * gig.date — and anything anchored off it, like Campaign.anchorDate — free
- * of a time-of-day component.
- */
-function parseDate(value: unknown): Date | null {
-  if (typeof value !== "string" && !(value instanceof Date)) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 /** Full validation for gig creation (POST). Applies defaults for optional fields. */

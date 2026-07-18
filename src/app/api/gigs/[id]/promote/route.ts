@@ -1,21 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { expandGigPromo, type ExpandContext } from "@/core/campaigns/expand";
-import { bandContextFromProfile } from "@/core/content/copy";
-
-/** Fallback band context used when no BandProfile row exists yet. */
-const FALLBACK_PROFILE = {
-  name: "Your Band",
-  genre: "",
-  homeTown: "",
-  bio: "",
-  audienceNotes: "",
-  links: "{}",
-};
-
-function utcMidnight(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
+import { getBandContext } from "@/lib/bandContext";
+import { utcMidnight } from "@/lib/dates";
 
 export async function POST(
   _request: NextRequest,
@@ -38,8 +25,7 @@ export async function POST(
     );
   }
 
-  const profile = await prisma.bandProfile.findUnique({ where: { id: "band" } });
-  const bandContext = bandContextFromProfile(profile ?? FALLBACK_PROFILE);
+  const bandContext = await getBandContext();
 
   const ctx: ExpandContext = {
     band: bandContext.name,

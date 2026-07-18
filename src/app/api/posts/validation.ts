@@ -1,6 +1,8 @@
 // Shared validation for the PostDraft PATCH route. Only present fields are
 // validated and applied (partial update).
 
+import { parseDateInput as parseDate } from "@/lib/dates";
+
 export const POST_STATUSES = ["idea", "drafted", "posted", "skipped"] as const;
 export type PostStatus = (typeof POST_STATUSES)[number];
 
@@ -16,13 +18,6 @@ type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 function isPlainObject(body: unknown): body is Record<string, unknown> {
   return typeof body === "object" && body !== null && !Array.isArray(body);
-}
-
-function parseDate(value: unknown): Date | null {
-  if (typeof value !== "string" && !(value instanceof Date)) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 export function parsePostUpdateInput(body: unknown): Result<PostUpdateData> {

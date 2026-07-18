@@ -44,7 +44,9 @@ function toUTCMidnight(d: Date): Date {
 // spec §4.2 clamping note: any generated date before `today` collapses to
 // `today` instead of being dropped — every checklist/post entry survives.
 function clampToToday(date: Date, today: Date): Date {
-  return date < today ? today : date;
+  // Fresh instance on clamp: returning `today` itself would make every
+  // clamped entry share one mutable Date object.
+  return date < today ? new Date(today.getTime()) : date;
 }
 
 function formatDate(d: Date): string {

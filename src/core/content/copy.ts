@@ -37,7 +37,13 @@ function parseLinks(raw: string): Record<string, string> {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, string>;
+      // Keep only string values — a stray number/object would otherwise
+      // leak through the cast and stringify as "[object Object]" downstream.
+      return Object.fromEntries(
+        Object.entries(parsed).filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string",
+        ),
+      );
     }
     return {};
   } catch {

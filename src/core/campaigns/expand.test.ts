@@ -270,6 +270,36 @@ describe("expandAlwaysOn", () => {
       expect(post.date.getTime()).toBeGreaterThanOrEqual(mondayStart.getTime());
     }
   });
+
+  it("weeks=3 pins both forced Promotion slots (posts 5 and 10) and no others", () => {
+    const c = expandAlwaysOn(start, 3, BASE_CTX);
+    expect(c.posts.length).toBe(12);
+    const pillars = c.posts.map((p) => p.pillar);
+    for (let i = 0; i < pillars.length; i++) {
+      if ((i + 1) % 5 === 0) {
+        expect(pillars[i]).toBe("Promotion");
+      } else {
+        expect(pillars[i]).toBe(
+          ALWAYS_ON_PILLAR_ROTATION[(i - Math.floor(i / 5)) % ALWAYS_ON_PILLAR_ROTATION.length],
+        );
+      }
+    }
+  });
+});
+
+describe("clamping", () => {
+  it("clamped entries each get their own Date instance (mutating one leaves the rest intact)", () => {
+    // Anchor 10 days after TODAY: every offset <= -14 clamps to TODAY.
+    const anchor = new Date(TODAY.getTime());
+    anchor.setUTCDate(anchor.getUTCDate() + 10);
+    const c = expandGigPromo(anchor, TODAY, BASE_CTX);
+    const clamped = c.tasks.filter((t) => t.dueDate.getTime() === TODAY.getTime());
+    expect(clamped.length).toBeGreaterThan(1);
+    expect(clamped[0].dueDate).not.toBe(clamped[1].dueDate);
+    expect(clamped[0].dueDate).not.toBe(TODAY);
+    clamped[0].dueDate.setUTCDate(clamped[0].dueDate.getUTCDate() + 99);
+    expect(clamped[1].dueDate.getTime()).toBe(TODAY.getTime());
+  });
 });
 
 describe("determinism + UTC-midnight invariant", () => {

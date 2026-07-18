@@ -178,7 +178,7 @@ export default function SetlistDetailPage() {
   const overBudget = totalDurationSec > setlist.targetDurationSec * 1.05;
 
   return (
-    <main>
+    <main className="print:text-base">
       <div className="flex items-center justify-between print:hidden">
         <h1 className="text-2xl font-semibold">{setlist.name}</h1>
         <div className="flex gap-2">
@@ -307,11 +307,6 @@ export default function SetlistDetailPage() {
         </table>
       </div>
 
-      <style>{`
-        @media print {
-          body { font-size: 16px; }
-        }
-      `}</style>
     </main>
   );
 }
