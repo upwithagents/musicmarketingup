@@ -103,7 +103,6 @@ export default function Home() {
   if (gigs === null || campaigns === null) {
     return (
       <main>
-        <h1 className="text-2xl font-semibold">🎤 MusicMarketingUp</h1>
         <p className="mt-6 text-gray-500">Loading…</p>
       </main>
     );
@@ -130,7 +129,6 @@ export default function Home() {
 
   return (
     <main>
-      <h1 className="text-2xl font-semibold">🎤 MusicMarketingUp</h1>
       <p className="mt-1 text-sm text-gray-500">Your band&apos;s week at a glance.</p>
 
       {isEmpty && (
