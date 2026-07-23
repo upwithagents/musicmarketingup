@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Archivo, Inter, IBM_Plex_Mono } from "next/font/google";
-import { ThemeScript } from "@upwithagents/ui";
-import { Nav } from "@/components/nav";
+import { AppNav, ThemeScript } from "@upwithagents/ui";
 import { PortalChrome } from "@/components/PortalChrome";
 import "./globals.css";
 
@@ -43,11 +42,19 @@ export default function RootLayout({
       </head>
       <body>
         <PortalChrome>
-          <header className="border-b border-[var(--border)] print:hidden">
-            <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-end gap-3 px-4 py-3">
-              <Nav />
-            </div>
-          </header>
+          <div className="print:hidden">
+            <AppNav
+              links={[
+                { href: "/", label: "Dashboard" },
+                { href: "/songs", label: "Songs" },
+                { href: "/setlists", label: "Setlists" },
+                { href: "/gigs", label: "Gigs" },
+                { href: "/calendar", label: "Calendar" },
+                { href: "/epk", label: "EPK" },
+                { href: "/profile", label: "Profile" },
+              ]}
+            />
+          </div>
           <div className="mx-auto max-w-4xl px-4 py-8">{children}</div>
         </PortalChrome>
       </body>
